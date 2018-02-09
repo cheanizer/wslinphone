@@ -24,7 +24,7 @@ namespace Telephony
     class WebSocketKu
     {
         WebSocketServer ws;
-        public static string address = "ws://localhost:3487";
+        public static string address = "ws://localhost:8786";
         public delegate void OnMessageRecived (string message);
         public delegate void OnSocketOpened();
         public delegate void OnTransated(Action action, string[] param);
@@ -55,10 +55,10 @@ namespace Telephony
        
         public void start()
         {
-            ws = new WebSocketServer ("ws://localhost:3487");
+            ws = new WebSocketServer ("ws://localhost:8786");
             ws.AddWebSocketService<Laputa> ("/Laputa");
             ws.Start ();
-            
+            Console.WriteLine("Connected");
         }
 
         public void stop()

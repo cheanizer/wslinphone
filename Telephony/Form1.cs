@@ -10,6 +10,7 @@ using System.IO;
 using System.Windows.Forms;
 using sipdotnet;
 using WebSocketSharp;
+using System.Timers;
 
 namespace Telephony
 {
@@ -43,6 +44,8 @@ namespace Telephony
             connectState = false;
             ippbx = new Ippbx();
             callDir = CallDirection.None;
+            this.ShowInTaskbar = false;
+
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -67,17 +70,32 @@ namespace Telephony
 
         }
 
+        private void broadcastStatus(object source, ElapsedEventArgs e)
+        {
+            if (phone == null || (phone != null && connectState == false))
+            {
+                ws.send("status|disconnected");
+            }else if (phone != null && connectState == true)
+            {
+                ws.send("status|connected");
+            }
+            else
+            {
+                ws.send("status|disconnected");
+            }
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
             string folder = AppDomain.CurrentDomain.BaseDirectory;
-            
 
+            statusStrip1.Text = "okebage";
             //Console.WriteLine(folder + "/recorded");
             Console.WriteLine(folder);
             txtLog.Text += "Welcome " + Environment.NewLine;
             lblHost.Text = Properties.Settings.Default.pbx_hosts;
             lblExt.Text = Properties.Settings.Default.pbx_extension;
-            lblName.Text = Properties.Settings.Default.pbx_caller;
+            
 
 
             ippbx.extension = Properties.Settings.Default.pbx_extension;
@@ -128,7 +146,13 @@ namespace Telephony
                     phone.ReceiveCall(call);
                 }
             };
-            //connect();
+
+
+            System.Timers.Timer aTimer = new System.Timers.Timer();
+            aTimer.Elapsed += new ElapsedEventHandler(broadcastStatus);
+            aTimer.Interval = 2000;
+
+            aTimer.Enabled = true;
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -167,12 +191,20 @@ namespace Telephony
             }
         }
 
+        private void create_call()
+        { 
+}
+
         private void disconnect()
         {
             phone.Disconnect();
             this.connectState = false;
             updateLog("Disconnected");
             button2.Enabled = false;
+            if (!connectState)
+            {
+                stsStatus.Text = "Disconnected";
+            }
         }
 
         private void connect()
@@ -236,6 +268,7 @@ namespace Telephony
                     this.call = call;
                     callRinging = true;
                     callDir = CallDirection.Inbound;
+                    
                     invokeUpdateLog("Incoming Call from " + call.GetFrom());
                     ws.send("call|incoming|" + call.GetFrom());
                 };
@@ -245,6 +278,10 @@ namespace Telephony
                 if (button2.InvokeRequired)
                 {
                     lblExt.Invoke(new MethodInvoker(delegate { button2.Enabled = true; }));
+                }
+                else
+                {
+                    button2.Enabled = true;
                 }
             }
         }
@@ -258,7 +295,6 @@ namespace Telephony
             {
                 ippbx = form.Ippbx;
                 lblHost.Text = ippbx.hosts;
-                lblName.Text = ippbx.callerid;
                 lblExt.Text = ippbx.extension;
 
                 connect();
@@ -280,8 +316,11 @@ namespace Telephony
         private void updateTelephonyInfo()
         {
             lblHost.Text = ippbx.hosts;
-            lblName.Text = ippbx.callerid;
             lblExt.Text = ippbx.extension;
+            if (connectState)
+            {
+                stsStatus.Text = "Connected";
+            }
         }
 
         private void invokeUpdateLog(string text)
@@ -298,7 +337,8 @@ namespace Telephony
 
         private void updateLog(string text)
         {
-            txtLog.Text += text + Environment.NewLine;
+            var time = DateTime.Now.ToString("yy-MM-d hh:mm:ss");
+            txtLog.Text +="[" + time +"] " + text + Environment.NewLine;
             txtLog.SelectionStart = txtLog.TextLength;
             txtLog.ScrollToCaret();
         }
@@ -316,6 +356,77 @@ namespace Telephony
         private void button3_Click_1(object sender, EventArgs e)
         {
             ws.send("nudes");
+        }
+
+        private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            this.Show();
+            this.WindowState = FormWindowState.Normal;
+            this.BringToFront();
+        }
+
+        private void TrayMinimizerForm_Resize(object sender, EventArgs e)
+        {
+            notifyIcon1.BalloonTipTitle = "Minimize to Tray App";
+            notifyIcon1.BalloonTipText = "You have successfully minimized your form.";
+
+            if (FormWindowState.Minimized == this.WindowState)
+            {
+                notifyIcon1.Visible = true;
+                notifyIcon1.ShowBalloonTip(500);
+                this.Hide();
+            }
+            else if (FormWindowState.Normal == this.WindowState)
+            {
+                notifyIcon1.Visible = false;
+                
+            }
+            
+        }
+
+        private void groupBox1_Enter_1(object sender, EventArgs e)
+        {
+
+        }
+
+        private void toolStripStatusLabel1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void txtExt_KeyDown(object sender, KeyEventArgs e)
+        {
+            
+            if (e.KeyCode == Keys.Enter)
+            {
+                if (!this.connectState)
+                {
+                    MessageBox.Show("Not connected to pbx server","Warning",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+                    return;
+                }
+                if (this.callDir == CallDirection.None || this.callDir == CallDirection.Outbound)
+                {
+                    var extension = txtExt.Text;
+                    if (callState || callRinging)
+                    {
+                        phone.TerminateCall(call);
+                        callState = false;
+                    }
+                    else
+                    {
+                        if (string.IsNullOrEmpty(extension))
+                        {
+                            MessageBox.Show("Extension cannot be empty", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                        else
+                        {
+                            updateLog("Calling " + extension);
+                            callRinging = true;
+                            phone.MakeCall(extension);
+                        }
+                    }
+                }
+            }
         }
     }
 }
