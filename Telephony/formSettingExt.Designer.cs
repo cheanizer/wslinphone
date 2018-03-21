@@ -59,16 +59,19 @@
             // 
             resources.ApplyResources(this.txtHost, "txtHost");
             this.txtHost.Name = "txtHost";
+            this.txtHost.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtHost_KeyDown);
             // 
             // txtExt
             // 
             resources.ApplyResources(this.txtExt, "txtExt");
             this.txtExt.Name = "txtExt";
+            this.txtExt.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtExt_KeyDown);
             // 
             // txtPasswd
             // 
             resources.ApplyResources(this.txtPasswd, "txtPasswd");
             this.txtPasswd.Name = "txtPasswd";
+            this.txtPasswd.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtPasswd_KeyDown);
             // 
             // button1
             // 

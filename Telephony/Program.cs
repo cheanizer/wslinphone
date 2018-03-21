@@ -25,7 +25,6 @@ namespace Telephony
                     MessageBox.Show("Aplikasi lain sedang berjalan. cek task manager!");
                     return;
                 }
-
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.Run(new Form1());

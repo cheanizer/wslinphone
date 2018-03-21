@@ -33,6 +33,7 @@ namespace Telephony
         public delegate void DoCall(string extension);
         public delegate void OnTerminate();
         public delegate void OnRecieve();
+        public delegate void OnDtmf(string number);
         
 
         public static event OnMessageRecived MessageRecived;
@@ -43,6 +44,7 @@ namespace Telephony
         public static event DoCall Call;
         public static event OnTerminate Terminate;
         public static event OnRecieve Recieve;
+        public static event OnDtmf SendDtmf;
         
 
         public enum Action {
@@ -110,6 +112,9 @@ namespace Telephony
                         break;
                     case "terminate":
                         Terminate();
+                        break;
+                    case "dtmf":
+                        SendDtmf(split[1]);
                         break;
                 }
             }

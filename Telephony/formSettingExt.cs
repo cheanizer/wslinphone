@@ -22,6 +22,19 @@ namespace Telephony
 
         private void button1_Click(object sender, EventArgs e)
         {
+            saveSettingAndClose();
+        }
+
+        private void formSettingExt_Load(object sender, EventArgs e)
+        {
+            txtHost.Text = Properties.Settings.Default.pbx_hosts;
+            txtExt.Text = Properties.Settings.Default.pbx_extension;
+            txtPasswd.Text = Properties.Settings.Default.pbx_password;
+            txtCallerId.Text = Properties.Settings.Default.pbx_caller;
+        }
+
+        public void saveSettingAndClose()
+        {
             Properties.Settings.Default["pbx_hosts"] = txtHost.Text;
             Properties.Settings.Default["pbx_extension"] = txtExt.Text;
             Properties.Settings.Default["pbx_password"] = txtPasswd.Text;
@@ -36,12 +49,28 @@ namespace Telephony
             this.Close();
         }
 
-        private void formSettingExt_Load(object sender, EventArgs e)
+        private void txtHost_KeyDown(object sender, KeyEventArgs e)
         {
-            txtHost.Text = Properties.Settings.Default.pbx_hosts;
-            txtExt.Text = Properties.Settings.Default.pbx_extension;
-            txtPasswd.Text = Properties.Settings.Default.pbx_password;
-            txtCallerId.Text = Properties.Settings.Default.pbx_caller;
+            if (e.KeyCode == Keys.Enter)
+            {
+                saveSettingAndClose();
+            }
+        }
+
+        private void txtExt_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                saveSettingAndClose();
+            }
+        }
+
+        private void txtPasswd_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                saveSettingAndClose();
+            }
         }
     }
 }

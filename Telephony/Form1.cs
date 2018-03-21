@@ -11,6 +11,10 @@ using System.Windows.Forms;
 using sipdotnet;
 using WebSocketSharp;
 using System.Timers;
+using Telephony.Helper;
+using Telephony.Models;
+using LiteDB;
+using System.Media;
 
 namespace Telephony
 {
@@ -32,8 +36,15 @@ namespace Telephony
             Inbound,
             Outbound
         };
-
+        private Recorder recorder;
         private CallDirection callDir;
+        private string inboundCallerId;
+        private LiteDatabase db;
+        private LiteCollection<Recording> collection;
+        private int duration;
+        private CallerIdentity callerIdentity;
+        private DTMF dtdt;
+        private SoundPlayer ringer;
         
         public Form1()
         {
@@ -45,6 +56,10 @@ namespace Telephony
             ippbx = new Ippbx();
             callDir = CallDirection.None;
             this.ShowInTaskbar = false;
+            db = new LiteDatabase(@"nwrtelephony");
+            collection = db.GetCollection<Recording>("recording");
+            dtdt = new DTMF();
+            ringer = new SoundPlayer(Properties.Resources.telephone_ring_04);
 
         }
 
@@ -59,17 +74,7 @@ namespace Telephony
                 disconnect();
             }
         }
-
-        private void groupBox1_Enter(object sender, EventArgs e)
-        {
-
-        }
-
-        private void tableLayoutPanel1_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
+        
         private void broadcastStatus(object source, ElapsedEventArgs e)
         {
             if (phone == null || (phone != null && connectState == false))
@@ -87,24 +92,15 @@ namespace Telephony
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            string folder = AppDomain.CurrentDomain.BaseDirectory;
-
-            statusStrip1.Text = "okebage";
-            //Console.WriteLine(folder + "/recorded");
-            Console.WriteLine(folder);
             txtLog.Text += "Welcome " + Environment.NewLine;
+            stsStatus.Text = "Disconnected";
             lblHost.Text = Properties.Settings.Default.pbx_hosts;
             lblExt.Text = Properties.Settings.Default.pbx_extension;
-            
-
-
             ippbx.extension = Properties.Settings.Default.pbx_extension;
             ippbx.password = Properties.Settings.Default.pbx_password;
             ippbx.hosts = Properties.Settings.Default.pbx_hosts;
             ippbx.callerid = Properties.Settings.Default.pbx_caller;
-            //button2.Enabled = false;
-
-
+            
             ws = new WebSocketKu();
             ws.start();
             lblSocket.Text = WebSocketKu.address;
@@ -126,7 +122,11 @@ namespace Telephony
 
             WebSocketKu.Call += delegate (string ex)
             {
-                phone.MakeCallAndRecord(ex, folder + "\recorded\testingx.wav");
+                invokeUpdateLog(ex);
+                dtdt.setDtmf(ex);
+                dtdt.semua();
+                phone.MakeCall(ex);
+                
             };
 
             WebSocketKu.Terminate += delegate ()
@@ -135,6 +135,7 @@ namespace Telephony
                 {
                     phone.TerminateCall(call);
                     callState = false;
+                    ringer.Stop();
                 }
             };
 
@@ -147,11 +148,14 @@ namespace Telephony
                 }
             };
 
-
+            WebSocketKu.SendDtmf += delegate (string number)
+            {
+                dtdt.play(int.Parse(number));
+                phone.SendDTMFs(call,number);
+            };
             System.Timers.Timer aTimer = new System.Timers.Timer();
             aTimer.Elapsed += new ElapsedEventHandler(broadcastStatus);
             aTimer.Interval = 2000;
-
             aTimer.Enabled = true;
         }
 
@@ -162,6 +166,8 @@ namespace Telephony
             System.Diagnostics.Debug.WriteLine("di clik");
             if (this.callDir == CallDirection.None || this.callDir == CallDirection.Outbound)
             {
+
+                Console.WriteLine(callState);
                 if (callState || callRinging)
                 {
                     phone.TerminateCall(call);
@@ -175,9 +181,11 @@ namespace Telephony
                     }
                     else
                     {
-                        updateLog("Calling " + extension);
+                        callerIdentity = new CallerIdentity(extension);
+
+                        updateLog("Calling " + callerIdentity.Number);
                         callRinging = true;
-                        phone.MakeCall(extension);
+                        //phone.MakeCall(callerIdentity.Number);
                     }
                 }
             }else if (callDir == CallDirection.Inbound && callState == false)
@@ -190,11 +198,7 @@ namespace Telephony
                 phone.TerminateCall(call);
             }
         }
-
-        private void create_call()
-        { 
-}
-
+        
         private void disconnect()
         {
             phone.Disconnect();
@@ -216,7 +220,8 @@ namespace Telephony
             else
             {
                 invokeUpdateLog("Registering ...");
-                invokeUpdateLog("Extension:" + ippbx.extension + " password:" + ippbx.password + " hosts:" + ippbx.hosts);
+                string pwd = Common.passwordToAsterixs(ippbx.password);
+                invokeUpdateLog("Extension:" + ippbx.extension + " password:" + pwd + " hosts:" + ippbx.hosts);
 
                 account = new Account(ippbx.extension, ippbx.password, ippbx.hosts);
                 phone = new Phone(account);
@@ -242,19 +247,59 @@ namespace Telephony
                 {
                     callRinging = false;
                     callDir = CallDirection.None;
+                    if (recorder != null)
+                    {
+                        recorder.stopRecordInput();
+                        recorder.stopRecordOutput();
+                    }
                     invokeUpdateLog("Call complete");
+                    callerIdentity = null;
                     ws.send("call|completed");
+                    notifyIcon1.BalloonTipTitle = "Call Completed";
+                    notifyIcon1.BalloonTipText = "Call completed";
+                    notifyIcon1.ShowBalloonTip(10000000);
+                    ringer.Stop();
                 };
 
                 phone.CallActiveEvent += delegate (Call call)
                 {
+                    ringer.Stop();
                     callState = true;
                     callRinging = false;
                     this.call = call;
+                    if (this.callerIdentity != null && (this.callerIdentity.Extension != null && this.callerIdentity.Extension.Equals("") == false ))
+                    {
+                        phone.SendDTMFs(call, callerIdentity.Extension);
+                    }
+                    
                     invokeUpdateLog("On Call");
+                    if (callDir == CallDirection.Inbound)
+                    {
+                        recorder = new Recorder(inboundCallerId);
+                    }else
+                    {
+                        recorder = new Recorder(txtExt.Text);
+                    }
+                    recorder.startRecordInput();
+                    recorder.startRecordOutput();
+                    recorder.CombineComplete += (s, e) => {
+                       Recording recording = recorder.getRecording();
+                       if (callDir == CallDirection.Inbound)
+                        {
+                            recording.Direction = Recording.RecDirection.Inbound;
+                        }
+                        else
+                        {
+                            recording.Direction = Recording.RecDirection.Outbound;
+                        }
+                        recording.Status = Recording.RecStatUpload.Unuploaded;
+                        invokeUpdateLog("Recording : " + recording.Filename);
+                        ws.send("recording|" + recording.Filename);
+                        collection.Insert(recording);
+                    };
                     ws.send("call|active");
                 };
-
+                
                 phone.LoadEvent += delegate (Call call)
                 {
                     callRinging = true;
@@ -268,11 +313,16 @@ namespace Telephony
                     this.call = call;
                     callRinging = true;
                     callDir = CallDirection.Inbound;
-                    
-                    invokeUpdateLog("Incoming Call from " + call.GetFrom());
-                    ws.send("call|incoming|" + call.GetFrom());
+                    callState = false;
+                    inboundCallerId = Common.getExtensionNumberFromCall(call.GetFrom());
+                    invokeUpdateLog("Incoming Call from " + inboundCallerId);
+                    ws.send("call|incoming|" + inboundCallerId);
+                    notifyIcon1.BalloonTipTitle = "Incoming Call";
+                    notifyIcon1.BalloonTipText = "Incoming call from " + inboundCallerId;
+                    notifyIcon1.ShowBalloonTip(1);
+                    ringer.Play();
                 };
-
+                
                 phone.Connect();
                 this.connectState = true;
                 if (button2.InvokeRequired)
@@ -296,7 +346,6 @@ namespace Telephony
                 ippbx = form.Ippbx;
                 lblHost.Text = ippbx.hosts;
                 lblExt.Text = ippbx.extension;
-
                 connect();
             }
         }
@@ -343,24 +392,15 @@ namespace Telephony
             txtLog.ScrollToCaret();
         }
 
-        private void button3_Click(object sender, EventArgs e)
-        {
-            ws.send("nudes");
-        }
-
         private void quitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Application.Exit();
         }
 
-        private void button3_Click_1(object sender, EventArgs e)
-        {
-            ws.send("nudes");
-        }
-
         private void notifyIcon1_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             this.Show();
+            this.Activate();
             this.WindowState = FormWindowState.Normal;
             this.BringToFront();
         }
@@ -372,26 +412,15 @@ namespace Telephony
 
             if (FormWindowState.Minimized == this.WindowState)
             {
+                if (notifyIcon1.Visible == false)
                 notifyIcon1.Visible = true;
-                notifyIcon1.ShowBalloonTip(500);
+                notifyIcon1.ShowBalloonTip(30000);
                 this.Hide();
             }
             else if (FormWindowState.Normal == this.WindowState)
             {
-                notifyIcon1.Visible = false;
-                
+                //notifyIcon1.Visible = false;
             }
-            
-        }
-
-        private void groupBox1_Enter_1(object sender, EventArgs e)
-        {
-
-        }
-
-        private void toolStripStatusLabel1_Click(object sender, EventArgs e)
-        {
-
         }
 
         private void txtExt_KeyDown(object sender, KeyEventArgs e)
@@ -420,13 +449,37 @@ namespace Telephony
                         }
                         else
                         {
-                            updateLog("Calling " + extension);
+                            callerIdentity = new CallerIdentity(extension);
+                            updateLog("Calling " + callerIdentity.Number);
                             callRinging = true;
-                            phone.MakeCall(extension);
+                            phone.MakeCall(callerIdentity.Number);
                         }
                     }
                 }
             }
+            else
+            {
+                string code = e.KeyData.ToString();
+                dtdt.playKeyCode(code);
+                if (callState)
+                {
+                    phone.SendDTMFs(call,dtdt.getNumber(code));
+                }
+                Console.WriteLine(e.KeyData.ToString());
+            }
+        }
+
+        private void recordingToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Form rec = new Views.FormRecording();
+            rec.Text = "Recording";
+            rec.Owner = this;
+            rec.ShowDialog(this);
+        }
+
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            Console.Beep();
         }
     }
 }

@@ -245,6 +245,9 @@
   <data name="txtPasswd.Location" type="System.Drawing.Point, System.Drawing">
     <value>92, 78</value>
   </data>
+  <data name="txtPasswd.PasswordChar" type="System.Char, mscorlib" xml:space="preserve">
+    <value>*</value>
+  </data>
   <data name="txtPasswd.Size" type="System.Drawing.Size, System.Drawing">
     <value>180, 20</value>
   </data>
@@ -286,6 +289,9 @@
   </data>
   <data name="&gt;&gt;button1.ZOrder" xml:space="preserve">
     <value>2</value>
+  </data>
+  <data name="txtCallerId.Enabled" type="System.Boolean, mscorlib">
+    <value>False</value>
   </data>
   <data name="txtCallerId.Location" type="System.Drawing.Point, System.Drawing">
     <value>92, 113</value>
